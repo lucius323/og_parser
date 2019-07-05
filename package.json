@@ -1,0 +1,33 @@
+{
+  "name": "og_parser",
+  "version": "1.0.0",
+  "description": "opengraph parser with node.js",
+  "main": "index.js",
+  "dependencies": {
+    "charset": "^1.0.1",
+    "got": "^9.6.0",
+    "iconv-lite": "^0.5.0",
+    "moment": "^2.24.0",
+    "suq": "^1.4.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lucius323/og_parser.git"
+  },
+  "keywords": [
+    "opengraph",
+    "og",
+    "tag",
+    "lucius"
+  ],
+  "author": "lucius323",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lucius323/og_parser/issues"
+  },
+  "homepage": "https://github.com/lucius323/og_parser#readme"
+}
