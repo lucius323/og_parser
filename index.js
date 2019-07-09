@@ -6,29 +6,37 @@
 //
 ///////////////////////////////////////////////////////////
 
-const AWS = require('aws-sdk')
-const suq = require('suq');
-const iconv = require('iconv-lite')
-const charset = require('charset')
-const got = require('got');
-const moment = require('moment');
+const AWS = require('aws-sdk')          // AWS SDK
+const suq = require('suq');             // OG Tag 파싱 라이브러리
+const iconv = require('iconv-lite')     // Encoding 라이브러리
+const charset = require('charset')      // headers charset Checker
+const got = require('got');             // Http Request
+const moment = require('moment');       // Date 라이브러리
 
 AWS.config.update({
     region: 'ap-northeast-2'
 })
 
+// DynamoDB 클라이언트 생성
 const docClient = new AWS.DynamoDB.DocumentClient()
+
+// 공통 에러 코드
 const INTERNAL_SERVER_ERROR = 500;
 const INVALID_PARAMETERS = 400;
 const SUCCESS = 200;
+
+// DynamoDB Table Name
+const TABLE_NAME = "OgTag"
 
 ///////////////////////////////////////////////////////////
 // Lambda Handler, this is the method that gets invoked
 // when the lambda server is triggered
 //
 ///////////////////////////////////////////////////////////
+
 exports.handler = async (event) => {
 
+    // 오늘 날짜 ex) 20190709
     let date = new moment().format('YYYYMMDD');
     let targetUrl = ""
 	let body = JSON.parse(event.body);
@@ -40,18 +48,26 @@ exports.handler = async (event) => {
         targetUrl = body.url
     }
     else {
+        // 파라미터 누락 시 에러 처리
         return errorResponse(INVALID_PARAMETERS, INVALID_PARAMETERS, "URL을 입력해주세요.")
     }
 
+    // DynamoDB Key
     let date_url = date + "_" + targetUrl
     console.log(`parsing target url => ${targetUrl}`)
 
+    // DynamoDB 검색 조건
     var params = {
-        TableName: "OgTag",
-        Key: {date_url}
+        TableName: TABLE_NAME,
+        Key: { date_url }
     };
 
     try {
+
+        /*
+        * 검색 조건으로 DynamoDB 검색 결과가 있는 경우, 결과 값 바로 리턴
+        * 없는 경우, 새로 파싱하여 DynamoDB 저장 처리 후 결과 값 리턴
+        * */
         let findResult = await docClient.get(params).promise();
         console.log(`findResult => ${JSON.stringify(findResult, null, 2)}`);
 
@@ -59,10 +75,13 @@ exports.handler = async (event) => {
             return successResponse(findResult.Item.tag)
         } else {
 
-            
+            // encoding을 null로 요청하여 charset 라이브러리가 파싱한 encoding type으로 iconv encoding 처리
 			let res = await got(targetUrl, { encoding : null })
 			// let res = await request({url: targetUrl, encoding: null, resolveWithFullResponse: true}).promise();
+
+            // http 요청 결과가 없는 경우 에러 처리
 			if (res && !res.body) return errorResponse(INTERNAL_SERVER_ERROR, INTERNAL_SERVER_ERROR, "페이지 정보를 찾을 수 없습니다.")
+
 			const enc = charset(res.headers, res.body) // 해당 사이트의 charset값을 획득
 
 			let i_result = ""
@@ -87,6 +106,10 @@ exports.handler = async (event) => {
                     }
                     else {
                         let resultData = {}
+
+                        /*
+                        opengraph Obj에서 ":" 구분자로 구분되어있는 Key값을 "_" 구분자로 변환하여 새로운 Obj 생성
+                         */
                         Object.keys(result.opengraph).forEach(key=>{
                             let keyArr = key.split(":");
                             if(keyArr[1] && keyArr[2]){
@@ -101,14 +124,14 @@ exports.handler = async (event) => {
                         console.log(`resultData => ${JSON.stringify(resultData,null,2)}`)
 
                         let putParams = {
-                            TableName: "OgTag",
+                            TableName: TABLE_NAME,
                             Item: {
                                 date_url,
                                 "tag": resultData
                             }
                         };
 
-                        let putResult = await docClient.put(putParams).promise();
+                        await docClient.put(putParams).promise();
                         console.log(`resultData => ${JSON.stringify(resultData, null, 2)}`);
                         resolve(resultData)
                     }
@@ -131,7 +154,7 @@ exports.handler = async (event) => {
     }
 }
 
-
+// Fail Result
 var errorResponse = function (statusCode,errorCode, detailMessage) {
     var messageMap = {
         400: 'Bad Request',
@@ -155,6 +178,7 @@ var errorResponse = function (statusCode,errorCode, detailMessage) {
     }
 };
 
+// Success Result
 var successResponse = function (body) {
 
     return {
